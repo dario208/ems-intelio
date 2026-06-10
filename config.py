@@ -63,10 +63,11 @@ class Settings(BaseSettings):
     REG_BREAKER_STATUS: int = 600   # ⚠️  Exemple
 
     # ── Registre de commande ───────────────────────────────────────────
-    # F06 Write Single Register
-    # ⚠️  Codes à confirmer dans votre Modbus Map :
-    #   1=Start · 2=Stop · 3=Fault Reset · 4=Remote On · 5=Remote Off
-    REG_COMMAND: int = 700   # ⚠️  Exemple
+    # Source : InteliNeo 5500 Modbus Map
+    #   4207-4208 : Command argument (Unsigned32, read/write)
+    #   4209      : Command code     (Unsigned16, write)
+    REG_COMMAND_ARG: int = 4207  # Argument de commande (Unsigned32, 2 registres)
+    REG_COMMAND:     int = 4209  # Code de commande    (Unsigned16, 1 registre)
 
     # ── API ────────────────────────────────────────────────────────────
     API_TITLE:             str = "ComAp InteliNeo 5500 — API"

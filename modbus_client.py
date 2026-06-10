@@ -121,14 +121,17 @@ async def read_breakers_only() -> dict[str, Any]:
 # ÉCRITURE COMMANDE
 # ══════════════════════════════════════════════════════════════════════
 
-async def write_command(command_id: int) -> None:
+async def write_command(command_id: int, argument: int = 0) -> None:
     """
-    Écrit un code de commande dans le registre REG_COMMAND (F06 Write Single Register).
+    Envoie une commande au contrôleur InteliNeo 5500.
 
-    ⚠️  Vérifiez dans votre Modbus Map si la commande est de type :
-        - Direct write : écrire la valeur et c'est tout
-        - Pulse : écrire la valeur, attendre ~500ms, remettre à 0
-        Décommentez le bloc "pulse" ci-dessous si nécessaire.
+    Protocole (source : Modbus Map InteliNeo 5500) :
+      1. Écrire l'argument (Unsigned32) dans REG_COMMAND_ARG (4207-4208) si non nul.
+      2. Écrire le code de commande (Unsigned16) dans REG_COMMAND (4209).
+
+    Args:
+        command_id : code de commande (ex. 1=Start, 2=Stop, 3=Fault Reset)
+        argument   : valeur d'argument (Unsigned32), 0 si non requis
     """
     client = AsyncModbusTcpClient(
         host=settings.MODBUS_HOST,
@@ -139,29 +142,37 @@ async def write_command(command_id: int) -> None:
         if not await client.connect():
             raise ConnectionError(f"Impossible de se connecter à {settings.MODBUS_HOST}")
 
+        uid = settings.MODBUS_UNIT_ID
+
+        # Étape 1 : écrire l'argument (Unsigned32 → 2 registres) si fourni
+        if argument != 0:
+            high_word = (argument >> 16) & 0xFFFF
+            low_word  = argument & 0xFFFF
+            arg_result = await client.write_registers(
+                address=_modbus_address(settings.REG_COMMAND_ARG),
+                values=[high_word, low_word],
+                device_id=uid,
+            )
+            if arg_result.isError():
+                raise RuntimeError(
+                    f"Échec écriture argument commande (reg={settings.REG_COMMAND_ARG}) : {arg_result}"
+                )
+
+        # Étape 2 : écrire le code de commande (Unsigned16 → 1 registre)
         result = await client.write_register(
             address=_modbus_address(settings.REG_COMMAND),
             value=command_id,
-            device_id=settings.MODBUS_UNIT_ID,
+            device_id=uid,
         )
         if result.isError():
-            actual_cmd_addr = _modbus_address(settings.REG_COMMAND)
-            if _is_illegal_data_address(result) and settings.MODBUS_ADDRESS_OFFSET != 0 and settings.REG_COMMAND != actual_cmd_addr:
-                result = await client.write_register(
-                    address=settings.REG_COMMAND,
-                    value=command_id,
-                    device_id=settings.MODBUS_UNIT_ID,
-                )
-            if result.isError():
-                raise RuntimeError(
-                    f"Échec écriture registre {settings.REG_COMMAND} (addr_modbus={actual_cmd_addr}) valeur={command_id} : {result}"
-                )
-        logger.info(f"Commande {command_id} → reg {settings.REG_COMMAND} @ {settings.MODBUS_HOST} [OK]")
+            raise RuntimeError(
+                f"Échec écriture commande (reg={settings.REG_COMMAND}) valeur={command_id} : {result}"
+            )
 
-        # ⚠️  Décommentez si votre contrôleur exige un reset (commande pulse) :
-        # import asyncio
-        # await asyncio.sleep(0.5)
-        # await client.write_register(address=settings.REG_COMMAND, value=0, device_id=settings.MODBUS_UNIT_ID)
+        logger.info(
+            f"Commande {command_id} (arg={argument}) → reg {settings.REG_COMMAND} "
+            f"@ {settings.MODBUS_HOST} [OK]"
+        )
 
     except (ConnectionException, OSError) as exc:
         raise ConnectionError(f"Erreur réseau lors de la commande : {exc}")

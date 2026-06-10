@@ -170,19 +170,24 @@ class CommandPayload(BaseModel):
     """
     Payload POST /api/v1/command
 
-    ⚠️  Codes à confirmer dans votre Modbus Map InteliNeo 5500.
-    Adaptez la whitelist selon les commandes réelles de votre contrôleur.
+    Source : InteliNeo 5500 Modbus Map
+      - REG_COMMAND_ARG (4207-4208) : argument Unsigned32 (optionnel)
+      - REG_COMMAND     (4209)      : code de commande Unsigned16
     """
     command_id: int = Field(
         ...,
-        description="Code de commande Modbus",
+        description="Code de commande Modbus (registre 4209)",
         examples=[1, 2, 3, 4, 5],
+    )
+    argument: int = Field(
+        default=0,
+        ge=0,
+        description="Argument de commande Unsigned32 (registres 4207-4208), 0 si non requis",
     )
 
     @field_validator("command_id")
     @classmethod
     def validate_command(cls, v: int) -> int:
-        # ⚠️  Whitelist — adaptez selon votre Modbus Map
         ALLOWED = {
             1,  # Start
             2,  # Stop
@@ -200,6 +205,7 @@ class CommandPayload(BaseModel):
 class CommandResponse(BaseModel):
     success:    bool = True
     command_id: int
+    argument:   int
     message:    str
     register:   int
 

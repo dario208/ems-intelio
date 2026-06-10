@@ -392,13 +392,14 @@ async def get_history(
 )
 async def send_command(payload: CommandPayload):
     try:
-        await write_command(command_id=payload.command_id)
+        await write_command(command_id=payload.command_id, argument=payload.argument)
     except Exception as exc:
         _handle_modbus_error(exc)
 
     return CommandResponse(
         command_id=payload.command_id,
-        message=f"Commande {payload.command_id} envoyée → {settings.MODBUS_HOST}",
+        argument=payload.argument,
+        message=f"Commande {payload.command_id} (arg={payload.argument}) envoyée → {settings.MODBUS_HOST}",
         register=settings.REG_COMMAND,
     )
 
