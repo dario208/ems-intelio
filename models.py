@@ -1,77 +1,70 @@
+"""
+models.py — Modèle ORM SQLAlchemy pour InteliNeo 5500.
+
+Table genset_history : toutes les sources du système hybride
+  - Réseau (Mains)   : voltage, frequency, mains_kw, mains_kvar
+  - Générateur (G)   : rpm, engine_state, gen_kw, gen_kvar
+  - PV Solaire       : pv_kw, pv_kvar
+  - BESS (Batterie)  : bess_soc, bess_kw, bess_kvar
+  - Disjoncteurs     : mcb, gcb, pvcb, bcb (Binary16 décodé)
+"""
+
+from datetime import datetime, timezone
+from sqlalchemy import Integer, Float, String, DateTime, Boolean
+from sqlalchemy.orm import Mapped, mapped_column
+from database import Base
 
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+class GensetHistory(Base):
+    __tablename__ = "genset_history"
 
-
-class Settings(BaseSettings):
-
-    # ── PostgreSQL ─────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql+psycopg2://postgres:password@localhost:5432/genset_db"
-
-    # ── Modbus TCP ─────────────────────────────────────────────────────
-    MODBUS_HOST:    str   = "192.168.1.100"  # ⚠️  IP réelle du contrôleur
-    MODBUS_PORT:    int   = 502
-    MODBUS_UNIT_ID: int   = 1               # ⚠️  Slave ID dans InteliConfig Neo
-    MODBUS_TIMEOUT: float = 3.0
-
-    # ── Réseau (Mains) ─────────────────────────────────────────────────
-    # voltage    : UINT16 — valeur directe en V
-    # frequency  : UINT16 × 0.01 → Hz
-    # mains_kw   : INT32  × 0.1  → kW   (registres N et N+1)
-    # mains_kvar : INT32  × 0.1  → kVAr (registres N et N+1)
-    REG_VOLTAGE:    int = 200   # ⚠️  Exemple
-    REG_FREQUENCY:  int = 201   # ⚠️  Exemple
-    REG_MAINS_KW:   int = 202   # ⚠️  Exemple — lit aussi 203
-    REG_MAINS_KVAR: int = 204   # ⚠️  Exemple — lit aussi 205
-
-    # ── Générateur ─────────────────────────────────────────────────────
-    # rpm          : INT16  — valeur directe en tr/min
-    # engine_state : StrList — index
-    # gen_kw       : INT32  × 0.1 → kW   (registres N et N+1)
-    # gen_kvar     : INT32  × 0.1 → kVAr (registres N et N+1)
-    # oil_pressure : INT16  × 0.1 → bar
-    # coolant_temp : INT16  — valeur directe en °C
-    REG_RPM:          int = 100   # ⚠️  Exemple
-    REG_ENGINE_STATE: int = 103   # ⚠️  Exemple
-    REG_GEN_KW:       int = 300   # ⚠️  Exemple — lit aussi 301
-    REG_GEN_KVAR:     int = 302   # ⚠️  Exemple — lit aussi 303
-    REG_OIL_PRESSURE: int = 101   # ⚠️  Exemple
-    REG_COOLANT_TEMP: int = 102   # ⚠️  Exemple
-
-    # ── PV Solaire ─────────────────────────────────────────────────────
-    # pv_kw   : INT32 × 0.1 → kW   (registres N et N+1)
-    # pv_kvar : INT32 × 0.1 → kVAr (registres N et N+1)
-    REG_PV_KW:   int = 400   # ⚠️  Exemple — lit aussi 401
-    REG_PV_KVAR: int = 402   # ⚠️  Exemple — lit aussi 403
-
-    # ── BESS (Batterie) ────────────────────────────────────────────────
-    # bess_soc  : UINT16 × 0.1 → %         (1 registre)
-    # bess_kw   : INT32  × 0.1 → kW        (registres N et N+1)
-    # bess_kvar : INT32  × 0.1 → kVAr      (registres N et N+1)
-    REG_BESS_SOC:  int = 500   # ⚠️  Exemple
-    REG_BESS_KW:   int = 501   # ⚠️  Exemple — lit aussi 502
-    REG_BESS_KVAR: int = 503   # ⚠️  Exemple — lit aussi 504
-
-    # ── Disjoncteurs ───────────────────────────────────────────────────
-    # Binary16 : bit 0=MCB · bit 1=GCB · bit 2=PVCB · bit 3=BCB
-    REG_BREAKER_STATUS: int = 600   # ⚠️  Exemple
-
-    # ── Registre de commande ───────────────────────────────────────────
-    # F06 Write Single Register
-    # ⚠️  Codes à confirmer dans votre Modbus Map :
-    #   1=Start · 2=Stop · 3=Fault Reset · 4=Remote On · 5=Remote Off
-    REG_COMMAND: int = 700   # ⚠️  Exemple
-
-    # ── API ────────────────────────────────────────────────────────────
-    API_TITLE:             str = "ComAp InteliNeo 5500 — API"
-    API_VERSION:           str = "1.0.0"
-    DEFAULT_HISTORY_LIMIT: int = 100
-    MAX_HISTORY_LIMIT:     int = 1000
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=True
+    # ── Clé primaire / horodatage ─────────────────────────────────────
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc), index=True,
     )
 
+    # ── Réseau (Mains) ────────────────────────────────────────────────
+    # Types Modbus : UINT16 (voltage, freq) · INT32 (kW, kVAr)
+    voltage:      Mapped[float] = mapped_column(Float,   nullable=True, comment="Tension Mains/Bus (V) — UINT16")
+    frequency:    Mapped[float] = mapped_column(Float,   nullable=True, comment="Fréquence réseau (Hz) — UINT16 ×0.01")
+    mains_kw:     Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance active réseau (kW) — INT32 ×0.1")
+    mains_kvar:   Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance réactive réseau (kVAr) — INT32 ×0.1")
 
-settings = Settings()
+    # ── Générateur (G) ────────────────────────────────────────────────
+    # Types Modbus : INT16 (rpm) · StrList (state) · INT32 (kW, kVAr)
+    rpm:          Mapped[int]   = mapped_column(Integer, nullable=True, comment="Vitesse moteur (tr/min) — INT16")
+    engine_state: Mapped[str]   = mapped_column(String(50), nullable=True, comment="État contrôleur — StrList décodé")
+    gen_kw:       Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance active générateur (kW) — INT32 ×0.1")
+    gen_kvar:     Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance réactive générateur (kVAr) — INT32 ×0.1")
+    oil_pressure: Mapped[float] = mapped_column(Float,   nullable=True, comment="Pression d'huile (bar) — INT16 ×0.1")
+    coolant_temp: Mapped[float] = mapped_column(Float,   nullable=True, comment="Température refroidissement (°C) — INT16")
 
+    # ── PV Solaire ────────────────────────────────────────────────────
+    # Types Modbus : INT32 (kW, kVAr)
+    pv_kw:        Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance active PV (kW) — INT32 ×0.1")
+    pv_kvar:      Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance réactive PV (kVAr) — INT32 ×0.1")
+
+    # ── BESS (Batterie) ───────────────────────────────────────────────
+    # Types Modbus : UINT16 (soc) · INT32 (kW, kVAr)
+    bess_soc:     Mapped[float] = mapped_column(Float,   nullable=True, comment="State of Charge batterie (%) — UINT16 ×0.1")
+    bess_kw:      Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance active BESS (kW) — INT32 ×0.1")
+    bess_kvar:    Mapped[float] = mapped_column(Float,   nullable=True, comment="Puissance réactive BESS (kVAr) — INT32 ×0.1")
+
+    # ── Disjoncteurs (Binary16, un bit par contact) ───────────────────
+    mcb_closed:   Mapped[bool]  = mapped_column(Boolean, nullable=True, comment="Main Circuit Breaker fermé — bit 0")
+    gcb_closed:   Mapped[bool]  = mapped_column(Boolean, nullable=True, comment="Generator Circuit Breaker fermé — bit 1")
+    pvcb_closed:  Mapped[bool]  = mapped_column(Boolean, nullable=True, comment="PV Circuit Breaker fermé — bit 2")
+    bcb_closed:   Mapped[bool]  = mapped_column(Boolean, nullable=True, comment="Battery Circuit Breaker fermé — bit 3")
+
+    # ── Méta ──────────────────────────────────────────────────────────
+    controller_ip: Mapped[str]  = mapped_column(String(45), nullable=True)
+
+    def __repr__(self) -> str:
+        return (
+            f"<GensetHistory id={self.id} ts={self.timestamp} "
+            f"state={self.engine_state} "
+            f"mains={self.mains_kw}kW gen={self.gen_kw}kW "
+            f"pv={self.pv_kw}kW bess_soc={self.bess_soc}%>"
+        )
