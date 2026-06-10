@@ -145,15 +145,16 @@ async def write_command(command_id: int) -> None:
             device_id=settings.MODBUS_UNIT_ID,
         )
         if result.isError():
-            if _is_illegal_data_address(result) and settings.REG_COMMAND > 0:
+            actual_cmd_addr = _modbus_address(settings.REG_COMMAND)
+            if _is_illegal_data_address(result) and settings.MODBUS_ADDRESS_OFFSET != 0 and settings.REG_COMMAND != actual_cmd_addr:
                 result = await client.write_register(
-                    address=_modbus_address(settings.REG_COMMAND - 1),
+                    address=settings.REG_COMMAND,
                     value=command_id,
                     device_id=settings.MODBUS_UNIT_ID,
                 )
             if result.isError():
                 raise RuntimeError(
-                    f"Échec écriture registre {settings.REG_COMMAND} valeur={command_id} : {result}"
+                    f"Échec écriture registre {settings.REG_COMMAND} (addr_modbus={actual_cmd_addr}) valeur={command_id} : {result}"
                 )
         logger.info(f"Commande {command_id} → reg {settings.REG_COMMAND} @ {settings.MODBUS_HOST} [OK]")
 
@@ -318,21 +319,24 @@ async def _rr(
     label: str,
 ) -> list[int]:
     """Read Registers — lit count registres à address et vérifie les erreurs."""
-    result = await client.read_holding_registers(address=_modbus_address(address), count=count, device_id=uid)
+    actual_addr = _modbus_address(address)
+    result = await client.read_holding_registers(address=actual_addr, count=count, device_id=uid)
     if result.isError():
-        if _is_illegal_data_address(result) and address > 0:
+        # Si l'adresse est invalide et que l'offset est non nul, essayer sans offset
+        # (cas où le contrôleur attend une adresse base-1 et MODBUS_ADDRESS_OFFSET vaut -1)
+        if _is_illegal_data_address(result) and settings.MODBUS_ADDRESS_OFFSET != 0 and address != actual_addr:
             result = await client.read_holding_registers(
-                address=_modbus_address(address - 1),
+                address=address,
                 count=count,
                 device_id=uid,
             )
             if not result.isError():
-                logger.debug(f"[{label}] addr={_modbus_address(address - 1)} raw={result.registers}")
+                logger.debug(f"[{label}] addr={address} (sans offset) raw={result.registers}")
                 return result.registers
         raise RuntimeError(
-            f"Lecture '{label}' échouée (addr={address}, count={count}) : {result}"
+            f"Lecture '{label}' échouée (addr_config={address}, addr_modbus={actual_addr}, count={count}) : {result}"
         )
-    logger.debug(f"[{label}] addr={_modbus_address(address)} raw={result.registers}")
+    logger.debug(f"[{label}] addr={actual_addr} raw={result.registers}")
     return result.registers
 
 
