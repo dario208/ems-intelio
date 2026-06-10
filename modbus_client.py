@@ -140,20 +140,27 @@ async def write_command(command_id: int) -> None:
             raise ConnectionError(f"Impossible de se connecter à {settings.MODBUS_HOST}")
 
         result = await client.write_register(
-            address=settings.REG_COMMAND,
+            address=_modbus_address(settings.REG_COMMAND),
             value=command_id,
-            slave=settings.MODBUS_UNIT_ID,
+            device_id=settings.MODBUS_UNIT_ID,
         )
         if result.isError():
-            raise RuntimeError(
-                f"Échec écriture registre {settings.REG_COMMAND} valeur={command_id} : {result}"
-            )
+            if _is_illegal_data_address(result) and settings.REG_COMMAND > 0:
+                result = await client.write_register(
+                    address=_modbus_address(settings.REG_COMMAND - 1),
+                    value=command_id,
+                    device_id=settings.MODBUS_UNIT_ID,
+                )
+            if result.isError():
+                raise RuntimeError(
+                    f"Échec écriture registre {settings.REG_COMMAND} valeur={command_id} : {result}"
+                )
         logger.info(f"Commande {command_id} → reg {settings.REG_COMMAND} @ {settings.MODBUS_HOST} [OK]")
 
         # ⚠️  Décommentez si votre contrôleur exige un reset (commande pulse) :
         # import asyncio
         # await asyncio.sleep(0.5)
-        # await client.write_register(address=settings.REG_COMMAND, value=0, slave=settings.MODBUS_UNIT_ID)
+        # await client.write_register(address=settings.REG_COMMAND, value=0, device_id=settings.MODBUS_UNIT_ID)
 
     except (ConnectionException, OSError) as exc:
         raise ConnectionError(f"Erreur réseau lors de la commande : {exc}")
@@ -311,11 +318,30 @@ async def _rr(
     label: str,
 ) -> list[int]:
     """Read Registers — lit count registres à address et vérifie les erreurs."""
-    result = await client.read_holding_registers(address=address, count=count, slave=uid)
+    result = await client.read_holding_registers(address=_modbus_address(address), count=count, device_id=uid)
     if result.isError():
+        if _is_illegal_data_address(result) and address > 0:
+            result = await client.read_holding_registers(
+                address=_modbus_address(address - 1),
+                count=count,
+                device_id=uid,
+            )
+            if not result.isError():
+                logger.debug(f"[{label}] addr={_modbus_address(address - 1)} raw={result.registers}")
+                return result.registers
         raise RuntimeError(
             f"Lecture '{label}' échouée (addr={address}, count={count}) : {result}"
         )
-    logger.debug(f"[{label}] addr={address} raw={result.registers}")
+    logger.debug(f"[{label}] addr={_modbus_address(address)} raw={result.registers}")
     return result.registers
+
+
+def _is_illegal_data_address(result: Any) -> bool:
+    """Retourne True si le contrôleur répond avec l'exception Modbus 0x02."""
+    return getattr(result, "exception_code", None) == 2
+
+
+def _modbus_address(address: int) -> int:
+    """Convertit une adresse issue de la map contrôleur vers l'adresse attendue par PyModbus."""
+    return address + settings.MODBUS_ADDRESS_OFFSET
 

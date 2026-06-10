@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     MODBUS_PORT:    int   = 502
     MODBUS_UNIT_ID: int   = 1               # ⚠️  Slave ID dans InteliConfig Neo
     MODBUS_TIMEOUT: float = 3.0
+    MODBUS_ADDRESS_OFFSET: int = -1        # ⚠️  La map ComAp est souvent en base 1; PyModbus attend souvent base 0
 
     # ── Réseau (Mains) ─────────────────────────────────────────────────
     # voltage    : UINT16 — valeur directe en V
