@@ -1,0 +1,21 @@
+# grafana/provisioning/datasources/influxdb.yml
+# Provisioning automatique de la datasource InfluxDB 2.x au démarrage de Grafana.
+# Aucune configuration manuelle requise — Grafana lit ce fichier au boot.
+
+apiVersion: 1
+
+datasources:
+  - name:      InfluxDB — InteliNeo 5500
+    type:      influxdb
+    uid:       influxdb-intelineo
+    access:    proxy
+    url:       http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version:       Flux
+      organization:  ems
+      defaultBucket: intelineo
+      tlsSkipVerify: true
+    secureJsonData:
+      token: ems-influx-token-secret
+    editable: false

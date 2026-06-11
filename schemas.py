@@ -214,3 +214,62 @@ class ErrorResponse(BaseModel):
     error:  str
     detail: str
     code:   int
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ALARMES
+# ══════════════════════════════════════════════════════════════════════
+
+class AlarmRecord(BaseModel):
+    """Un enregistrement d'alarme depuis PostgreSQL."""
+    id:               int
+    timestamp:        datetime
+    severity:         str
+    code:             str
+    message:          str
+    source:           str
+    acknowledged:     bool
+    acknowledged_at:  Optional[datetime] = None
+    model_config = {"from_attributes": True}
+
+
+class AlarmResponse(BaseModel):
+    total:   int
+    limit:   int
+    offset:  int
+    records: List[AlarmRecord]
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ADMIN — MODE FALLBACK
+# ══════════════════════════════════════════════════════════════════════
+
+class FallbackPayload(BaseModel):
+    """Payload POST /api/v1/admin/fallback"""
+    enabled: bool
+
+
+class FallbackStatus(BaseModel):
+    """Réponse GET /api/v1/admin/fallback"""
+    enabled:      bool
+    mode:         str   # "normal" | "fallback"
+    description:  str
+
+
+# ══════════════════════════════════════════════════════════════════════
+# HEALTH CHECK
+# ══════════════════════════════════════════════════════════════════════
+
+class ServiceHealth(BaseModel):
+    status:  str            # "ok" | "degraded" | "down"
+    latency_ms: Optional[float] = None
+    detail:  Optional[str]  = None
+
+
+class HealthResponse(BaseModel):
+    status:     str         # "ok" | "degraded" | "down"
+    version:    str
+    mode:       str         # "normal" | "fallback"
+    influxdb:   ServiceHealth
+    postgresql: ServiceHealth
+    modbus:     ServiceHealth

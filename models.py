@@ -10,6 +10,7 @@ Table genset_history : toutes les sources du système hybride
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import Integer, Float, String, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
@@ -68,3 +69,39 @@ class GensetHistory(Base):
             f"mains={self.mains_kw}kW gen={self.gen_kw}kW "
             f"pv={self.pv_kw}kW bess_soc={self.bess_soc}%>"
         )
+
+
+class Alarm(Base):
+    """
+    Alarmes système — générées par le collecteur fallback ou détectées par FastAPI.
+    Stockées uniquement dans PostgreSQL (même en mode normal InfluxDB).
+    """
+    __tablename__ = "alarms"
+
+    id:        Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc), index=True,
+    )
+
+    # ── Classification ────────────────────────────────────────────────
+    severity: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True,
+        comment="Niveau : info | warning | critical",
+    )
+    code:     Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True,
+        comment="Code court : MODBUS_TIMEOUT, INFLUX_DOWN, etc.",
+    )
+    message:  Mapped[str] = mapped_column(String(500), nullable=False)
+    source:   Mapped[str] = mapped_column(
+        String(50), nullable=False, default="system",
+        comment="Origine : mains | bess | pv | breakers | system | influxdb",
+    )
+
+    # ── Acquittement ──────────────────────────────────────────────────
+    acknowledged:    Mapped[bool]             = mapped_column(Boolean, nullable=False, default=False)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<Alarm id={self.id} [{self.severity}] {self.code} @ {self.timestamp}>"

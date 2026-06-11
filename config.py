@@ -65,6 +65,17 @@ class Settings(BaseSettings):
     REG_COMMAND_ARG: int = 4207
     REG_COMMAND:     int = 4209
 
+    # ── InfluxDB 2.x ───────────────────────────────────────────────────
+    # Remplace PostgreSQL comme stockage principal des métriques temps réel.
+    # Telegraf écrit chaque seconde ; FastAPI lit via influx_reader.py.
+    # En mode fallback, PostgreSQL reprend automatiquement.
+    INFLUX_URL:    str = "http://localhost:8086"
+    INFLUX_TOKEN:  str = "ems-influx-token-secret"
+    INFLUX_ORG:    str = "ems"
+    INFLUX_BUCKET: str = "intelineo"
+    # Timeout en secondes pour les requêtes vers InfluxDB
+    INFLUX_TIMEOUT: int = 5
+
     # ── API ────────────────────────────────────────────────────────────
     API_TITLE:             str = "ComAp InteliNeo 5500 — API"
     API_VERSION:           str = "1.0.0"
