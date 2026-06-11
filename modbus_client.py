@@ -308,8 +308,10 @@ async def _rr(
     actual_addr = _modbus_address(address)
     result = await client.read_holding_registers(address=actual_addr, count=count, device_id=uid)
     if result.isError():
-        # Si adresse invalide et offset non nul, essayer sans offset
-        if _is_illegal_data_address(result) and settings.MODBUS_ADDRESS_OFFSET != 0 and address != actual_addr:
+        # Si erreur d'adresse (code 2) ou device failure (code 4) et offset non nul,
+        # essayer sans offset (au cas où les adresses de la table sont déjà des PDU addresses)
+        exc_code = getattr(result, "exception_code", None)
+        if exc_code in (2, 4) and settings.MODBUS_ADDRESS_OFFSET != 0 and address != actual_addr:
             result = await client.read_holding_registers(
                 address=address,
                 count=count,
@@ -331,5 +333,5 @@ def _is_illegal_data_address(result: Any) -> bool:
 
 
 def _modbus_address(address: int) -> int:
-    """Convertit une adresse ComAp (1-based) vers l'adresse PyModbus (0-based)."""
+    """Applique MODBUS_ADDRESS_OFFSET sur l'adresse (0 = adresses déjà en PDU 0-based)."""
     return address + settings.MODBUS_ADDRESS_OFFSET

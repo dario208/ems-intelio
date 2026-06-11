@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     MODBUS_PORT:           int   = 502
     MODBUS_UNIT_ID:        int   = 1
     MODBUS_TIMEOUT:        float = 3.0
-    MODBUS_ADDRESS_OFFSET: int   = -1  # Map ComAp 1-based → PyModbus 0-based
+    MODBUS_ADDRESS_OFFSET: int   = 0   # Registres IN5500.txt déjà en PDU 0-based
 
     # ── Réseau (Mains/Bus) ─────────────────────────────────────────────
     # Source : IN5500.txt — Table: Values
