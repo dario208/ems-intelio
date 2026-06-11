@@ -91,10 +91,28 @@ def get_db_context() -> Generator[Session, None, None]:
 def init_db() -> None:
     """
     Crée toutes les tables définies dans les modèles SQLAlchemy
-    si elles n'existent pas encore.
-
-    Appelée au démarrage de l'application dans le lifespan FastAPI.
+    si elles n'existent pas encore, et ajoute les colonnes manquantes
+    sur les tables existantes (migration automatique légère).
     """
-    # L'import des modèles est nécessaire pour que Base.metadata les connaisse
+    import logging
+    from sqlalchemy import inspect, text
+
+    log = logging.getLogger(__name__)
+
     import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    inspector = inspect(engine)
+    with engine.connect() as conn:
+        for table_name, table in Base.metadata.tables.items():
+            if not inspector.has_table(table_name):
+                continue
+            existing_cols = {col["name"] for col in inspector.get_columns(table_name)}
+            for col in table.columns:
+                if col.name not in existing_cols:
+                    col_type = col.type.compile(engine.dialect)
+                    conn.execute(text(
+                        f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{col.name}" {col_type}'
+                    ))
+                    log.warning("Migration: colonne ajoutée → %s.%s (%s)", table_name, col.name, col_type)
+        conn.commit()
