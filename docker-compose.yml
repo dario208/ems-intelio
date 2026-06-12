@@ -26,6 +26,9 @@ services:
       retries: 10
 
   # ── Telegraf — collecteur Modbus → InfluxDB (polling 1 s) ─────────────
+  # network_mode: host — Telegraf utilise le réseau de l'hôte directement,
+  # ce qui lui permet d'atteindre l'InteliNeo 5500 (192.168.1.100:502)
+  # sans passer par le bridge Docker. L'URL InfluxDB devient localhost:8086.
   telegraf:
     image: telegraf:1.30-alpine
     container_name: ems-telegraf
@@ -35,11 +38,7 @@ services:
         condition: service_healthy
     volumes:
       - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
-    networks:
-      - ems-net
-    # Accès réseau au contrôleur InteliNeo (hôte externe)
-    extra_hosts:
-      - "intelineo:${MODBUS_HOST:-192.168.1.100}"
+    network_mode: host
 
   # ── PostgreSQL — base de données relationnelle (fallback + commandes) ──
   postgres:
